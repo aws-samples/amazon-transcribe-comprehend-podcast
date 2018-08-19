@@ -1,0 +1,103 @@
+{
+  "StartAt": "IsDryRun",
+  "States": {
+    "IsDryRun": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.dryrun",
+          "StringEquals": "TRUE",
+          "Next": "Complete"
+        }
+      ],
+      "Default": "Download Podcast"
+    },
+    "Download Podcast": {
+      "Type": "Task",
+      "Resource": "${downloadPodcast.Arn}",
+      "ResultPath": "$.audioS3Location",
+      "Next": "Start Transcribe"
+    },
+    "Start Transcribe": {
+      "Type": "Task",
+      "Resource": "${podcastTranscribe.Arn}",
+      "InputPath": "$",
+      "ResultPath": "$.transcribe",
+      "Next": "Check Transcribe Status",
+      "Retry": [
+        {
+          "ErrorEquals": [ "ThrottlingException" ],
+          "IntervalSeconds": 120,
+          "BackoffRate": 2,
+          "MaxAttempts": 5
+        },
+        {
+          "ErrorEquals": [ "States.ALL" ],
+          "IntervalSeconds": 60,
+          "BackoffRate": 2,
+          "MaxAttempts": 3
+        }
+      ]
+    },
+    "Check Transcribe Status": {
+      "Type": "Task",
+      "Resource": "${checkTranscribe.Arn}",
+      "InputPath": "$.transcribe",
+      "ResultPath": "$.transcribeStatus",
+      "Next": "Is Transcribe Completed?"
+    },
+    "Wait for Transcribe Completion": {
+      "Type": "Wait",
+      "Seconds": 60,
+      "Next": "Check Transcribe Status"
+    },
+    "Is Transcribe Completed?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.transcribeStatus.status",
+          "StringEquals": "COMPLETED",
+          "Next": "Process Transcription"
+        }
+      ],
+      "Default": "Wait for Transcribe Completion"
+    },
+    "Process Transcription": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "Process Transcript by Paragraph",
+          "States": {
+            "Process Transcript by Paragraph": {
+              "Type": "Task",
+              "Resource": "${processTranscriptionParagraph.Arn}",
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "Generate Full Text Transcript",
+          "States": {
+            "Generate Full Text Transcript": {
+              "Type": "Task",
+              "Resource": "${processTranscriptionFullText.Arn}",
+              "End": true
+            }
+          }
+        }
+      ],
+      "ResultPath": "$.processedTranscription",
+      "Next": "uploadToElasticsearch"
+    },
+    "uploadToElasticsearch": {
+      "Type": "Task",
+      "Resource": "${uploadToElasticsearch.Arn}",
+      "InputPath": "$",
+      "ResultPath": "$.elasticsearchResult",
+      "Next": "Complete"
+    },
+    "Complete": {
+      "Type": "Succeed"
+    }
+  }
+}

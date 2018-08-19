@@ -1,0 +1,724 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: A serverless application that leverages Amazon Comprehend, Transcribe, ElasticSearch and Step Functions to index podcast episodes.
+
+Globals:
+  Function:
+    Runtime: python2.7
+    Timeout: 180
+    Environment:
+      Variables:
+        DEBUG_MODE: false
+        ES_EPISODE_INDEX: episodes
+#        LOG_LEVEL: DEBUG
+
+Parameters: 
+  kibanaUser:
+    Type: String
+    Default: kibana
+    Description: The name of the user that is used to log into kibana.
+  AudioOffset: 
+    Type: String
+    Default: '1'
+    AllowedValues: 
+      - '1'
+      - '2'
+      - '3'
+      - '4'
+      - '5'
+    Description: The number of seconds before the keyword that the audio clip will start when hyperlinked.
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+  downloadPodcast:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: download_podcast.lambda_handler
+      Runtime: python2.7
+      Description: 'This function downloads the podcast from the supplied url and uploads it to S3'
+      MemorySize: 512
+      Timeout: 300
+      Role: !GetAtt LambdaServiceRole.Arn
+      CodeUri: ./src
+  podcastTranscribe:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: podcast_transcribe.lambda_handler
+      Runtime: python2.7
+      Description: ''
+      MemorySize: 128
+      Timeout: 15
+      Role: !GetAtt LambdaServiceRole.Arn
+      CodeUri: ./src
+  checkTranscribe:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: check_transcribe.lambda_handler
+      Runtime: python2.7
+      Description: ''
+      MemorySize: 128
+      Role: !GetAtt LambdaServiceRole.Arn
+      Timeout: 15
+      CodeUri: ./src
+  createElasticsearchIndex:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: elasticsearch_createindex.lambda_handler
+      Runtime: python2.7
+      Description: ''
+      MemorySize: 256
+      Timeout: 60
+      CodeUri: ./src
+      Role: !GetAtt LambdaServiceRole.Arn
+      Environment:
+        Variables:
+          ES_DOMAIN: !GetAtt ESDomain.DomainEndpoint
+  processTranscriptionParagraph:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: process_transcription_paragraph.lambda_handler
+      Runtime: python2.7
+      Description: ''
+      MemorySize: 128
+      Timeout: 150
+      CodeUri: ./src
+      Role: !GetAtt LambdaServiceRole.Arn
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref Bucket
+  processTranscriptionFullText:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: process_transcription_full_text.lambda_handler
+      Runtime: python2.7
+      Description: ''
+      MemorySize: 256
+      Timeout: 150
+      CodeUri: ./src
+      Role: !GetAtt LambdaServiceRole.Arn
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref Bucket
+  uploadToElasticsearch:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: upload_to_elasticsearch.lambda_handler
+      Runtime: python2.7
+      Description: ''
+      MemorySize: 256
+      Timeout: 60
+      CodeUri: ./src
+      Role: !GetAtt LambdaServiceRole.Arn
+      Environment:
+        Variables:
+          ES_DOMAIN: !GetAtt ESDomain.DomainEndpoint
+          AUDIO_OFFSET: !Ref AudioOffset
+  processPodcastRss:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: process_podcast_rss.lambda_handler
+      Runtime: python2.7
+      Description: ''
+      MemorySize: 128
+      Timeout: 300
+      CodeUri: ./src
+      Role: !GetAtt LambdaServiceRole.Arn
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref Bucket
+  processPodcastItem:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: process_podcast_item.lambda_handler
+      Runtime: python2.7
+      Description: ''
+      MemorySize: 128
+      Timeout: 300
+      CodeUri: ./src
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref Bucket
+          DRY_RUN: 'TRUE'
+          STEP_FUNCTION_ARN: !Ref EpisodeStateMachine
+      Role: !GetAtt LambdaServiceRole.Arn
+  createTranscribeVocabulary:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: create_transcribe_vocabulary.lambda_handler
+      Runtime: python2.7
+      Description: ''
+      MemorySize: 128
+      Timeout: 300
+      CodeUri: ./src
+      Role: !GetAtt LambdaServiceRole.Arn
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref Bucket
+  monitorTranscribeVocabulary:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: create_transcribe_vocabulary.check_vocabulary_status
+      Runtime: python2.7
+      Description: ''
+      MemorySize: 128
+      Timeout: 300
+      CodeUri: ./src
+      Role: !GetAtt LambdaServiceRole.Arn
+  deleteTranscribeVocabulary:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: create_transcribe_vocabulary.delete_vocabulary
+      Runtime: python2.7
+      Description: ''
+      MemorySize: 128
+      Timeout: 300
+      CodeUri: ./src
+      Role: !GetAtt LambdaServiceRole.Arn
+  LambdaServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+  LambdaRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${Bucket}/podcasts/*'
+              - !Sub 'arn:aws:s3:::${Bucket}'
+          - Effect: Allow
+            Action:
+              - 'es:ESHttpGet'
+              - 'es:ESHttpPost'
+              - 'es:ESHttpPut'
+              - 'es:ESHttpHead'
+            Resource:
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ESDomain}/*'
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ESDomain}'
+          - Effect: Allow
+            Action:
+              - 'transcribe:GetTranscriptionJob'
+              - 'transcribe:StartTranscriptionJob'
+              - 'transcribe:CreateVocabulary'
+              - 'transcribe:DeleteVocabulary'
+              - 'transcribe:ListVocabularies'
+              - 'transcribe:GetVocabulary'
+              - 'comprehend:DetectEntities'
+              - 'comprehend:DetectKeyPhrases'
+              - 'comprehend:BatchDetectEntities'
+              - 'comprehend:*'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'states:DescribeExecution'
+              - 'states:StartExecution'
+            Resource:
+              - !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:execution:${EpisodeStateMachine.Name}:*'
+              - !Ref EpisodeStateMachine
+          - Effect: "Allow"
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+      Description: lambda role
+      Roles:
+        - !Ref 'LambdaServiceRole'
+  StatesExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - !Sub states.${AWS::Region}.amazonaws.com
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: StatesExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource: "*"
+  EpisodeStateMachine:
+    Type: "AWS::StepFunctions::StateMachine"
+    Properties:
+      RoleArn: !GetAtt StatesExecutionRole.Arn
+      DefinitionString:
+        !Sub |-
+          {
+            "StartAt": "IsDryRun",
+            "States": {
+              "IsDryRun": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.dryrun",
+                    "StringEquals": "TRUE",
+                    "Next": "Complete"
+                  }
+                ],
+                "Default": "Download Podcast"
+              },
+              "Download Podcast": {
+                "Type": "Task",
+                "Resource": "${downloadPodcast.Arn}",
+                "ResultPath": "$.audioS3Location",
+                "Next": "Start Transcribe"
+              },
+              "Start Transcribe": {
+                "Type": "Task",
+                "Resource": "${podcastTranscribe.Arn}",
+                "InputPath": "$",
+                "ResultPath": "$.transcribe",
+                "Next": "Check Transcribe Status",
+                "Retry": [
+                  {
+                    "ErrorEquals": [ "ThrottlingException" ],
+                    "IntervalSeconds": 120,
+                    "BackoffRate": 2,
+                    "MaxAttempts": 5
+                  },
+                  {
+                    "ErrorEquals": [ "States.ALL" ],
+                    "IntervalSeconds": 60,
+                    "BackoffRate": 2,
+                    "MaxAttempts": 3
+                  }
+                ]
+              },
+              "Check Transcribe Status": {
+                "Type": "Task",
+                "Resource": "${checkTranscribe.Arn}",
+                "InputPath": "$.transcribe",
+                "ResultPath": "$.transcribeStatus",
+                "Next": "Is Transcribe Completed?"
+              },
+              "Wait for Transcribe Completion": {
+                "Type": "Wait",
+                "Seconds": 60,
+                "Next": "Check Transcribe Status"
+              },
+              "Is Transcribe Completed?": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.transcribeStatus.status",
+                    "StringEquals": "COMPLETED",
+                    "Next": "Process Transcription"
+                  }
+                ],
+                "Default": "Wait for Transcribe Completion"
+              },
+              "Process Transcription": {
+                "Type": "Parallel",
+                "Branches": [
+                  {
+                    "StartAt": "Process Transcript by Paragraph",
+                    "States": {
+                      "Process Transcript by Paragraph": {
+                        "Type": "Task",
+                        "Resource": "${processTranscriptionParagraph.Arn}",
+                        "End": true
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "Generate Full Text Transcript",
+                    "States": {
+                      "Generate Full Text Transcript": {
+                        "Type": "Task",
+                        "Resource": "${processTranscriptionFullText.Arn}",
+                        "End": true
+                      }
+                    }
+                  }
+                ],
+                "ResultPath": "$.processedTranscription",
+                "Next": "uploadToElasticsearch"
+              },
+              "uploadToElasticsearch": {
+                "Type": "Task",
+                "Resource": "${uploadToElasticsearch.Arn}",
+                "InputPath": "$",
+                "ResultPath": "$.elasticsearchResult",
+                "Next": "Complete"
+              },
+              "Complete": {
+                "Type": "Succeed"
+              }
+            }
+          }
+
+  RssStateMachine:
+    Type: "AWS::StepFunctions::StateMachine"
+    Properties:
+      RoleArn: !GetAtt StatesExecutionRole.Arn
+      DefinitionString:
+        !Sub |-
+        {
+          "StartAt": "Process Podcast Rss",
+          "States": {
+            "Process Podcast Rss": {
+              "Type": "Task",
+              "Resource": "${processPodcastRss.Arn}",
+              "Next": "Create Custom Vocabulary for Transcribe",
+              "ResultPath": "$"
+            },
+            "Create Custom Vocabulary for Transcribe": {
+              "Type": "Task",
+              "Resource": "${createTranscribeVocabulary.Arn}",
+              "Next": "Is Vocabulary Completed?",
+              "ResultPath": "$.vocabularyInfo"
+            },
+            "Is Vocabulary Completed?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.vocabularyInfo.status",
+                  "StringEquals": "READY",
+                  "Next": "Create ElasticSearch Index Mapping"
+                }
+              ],
+              "Default": "Wait For Vocabulary Creation"
+            },
+            "Wait For Vocabulary Creation": {
+              "Type": "Wait",
+              "Seconds": 5,
+              "Next": "Check Vocabulary Status"
+            },
+            "Check Vocabulary Status": {
+              "Type": "Task",
+              "Resource": "${monitorTranscribeVocabulary.Arn}",
+              "Next": "Is Vocabulary Completed?",
+              "InputPath": "$.vocabularyInfo",
+              "ResultPath": "$.vocabularyInfo"
+            },
+            "Create ElasticSearch Index Mapping" : {
+              "Type": "Task",
+              "Resource": "${createElasticsearchIndex.Arn}",
+              "Next": "Process Podcast Episodes",
+              "InputPath": null,
+              "ResultPath": null
+            },
+            "Process Podcast Episodes": {
+              "Type": "Task",
+              "Resource": "${processPodcastItem.Arn}",
+              "Next": "Are all Episodes Processed?",
+              "ResultPath": "$.episodes"
+            },
+            "Are all Episodes Processed?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.episodes.status",
+                  "StringEquals": "COMPLETE",
+                  "Next": "Delete Transcribe Custom Vocabulary"
+                }
+              ],
+              "Default": "Wait 30 Seconds"
+            },
+            "Wait 30 Seconds": {
+              "Type": "Wait",
+              "Seconds": 30,
+              "Next": "Process Podcast Episodes"
+            },
+            "Delete Transcribe Custom Vocabulary": {
+              "Type": "Task",
+              "Resource": "${deleteTranscribeVocabulary.Arn}",
+              "InputPath": "$.vocabularyInfo",
+              "ResultPath": "$.vocabularyInfo",
+              "End": true
+            }
+          }
+        }
+  ESDomain:
+    Type: AWS::Elasticsearch::Domain
+    Properties:
+      EBSOptions:
+        EBSEnabled: true
+        VolumeSize: 10
+        VolumeType: gp2
+      AdvancedOptions:
+        indices.fielddata.cache.size: ''
+        rest.action.multi.allow_explicit_index: 'true'
+      ElasticsearchClusterConfig:
+        DedicatedMasterEnabled: false
+        InstanceCount: 1
+        InstanceType: t2.small.elasticsearch
+        ZoneAwarenessEnabled: false
+      ElasticsearchVersion: '6.2'
+  elasticsearchCognito:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: elasticsearch-cognito.lambda_handler
+      Runtime: python2.7
+      Description: ''
+      MemorySize: 512
+      Timeout: 240
+      Role: !GetAtt CfnLambdaServiceRole.Arn
+      CodeUri: ./src
+      Environment:
+        Variables:
+          STEP_FUNCTION_ARN: !Ref CfnStepFunction
+  checkElasticsearchStatus:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: elasticsearch-cognito.check_status
+      Runtime: python2.7
+      Description: ''
+      Role: !GetAtt CfnLambdaServiceRole.Arn
+      MemorySize: 128
+      Timeout: 15
+      CodeUri: ./src
+  CfnLambdaServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+  CfnLambdaRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - iam:PassRole
+            Resource: !GetAtt CognitoAccessForAmazonES.Arn
+          - Effect: Allow
+            Action:
+              - 's3:putObject'
+            Resource:
+              - 'arn:aws:s3:::gillemi-gillemi/*'
+          - Effect: Allow
+            Action:
+              - 'cognito-idp:AdminCreateUser'
+              - 'cognito-idp:CreateUserPoolDomain'
+              - 'cognito-idp:DeleteUserPoolDomain'
+            Resource:
+              - '*'
+          - Effect: Allow
+            Action:
+              - 'es:*'
+            Resource:
+              - '*'
+          - Effect: Allow
+            Action:
+              - 'states:DescribeExecution'
+              - 'states:StartExecution'
+            Resource:
+              - !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:execution:${CfnStepFunction.Name}:*'
+              - !Ref CfnStepFunction
+          - Effect: "Allow"
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+      Description: lambda role
+      Roles:
+        - !Ref 'CfnLambdaServiceRole'
+  CognitoIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      AllowUnauthenticatedIdentities: true
+      CognitoIdentityProviders:
+      - ClientId: !Ref CognitoApplicationClient
+        ProviderName: !Sub cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}
+        ServerSideTokenCheck: false
+  CognitoIdentityPoolRole:
+    Type: "AWS::Cognito::IdentityPoolRoleAttachment"
+    Properties:
+      IdentityPoolId: !Ref CognitoIdentityPool
+      Roles: 
+        unauthenticated: !GetAtt 'CognitoUnauthRole.Arn'
+        authenticated: !GetAtt 'CognitoAuthRole.Arn'
+  CognitoUserPool:
+    Type: "AWS::Cognito::UserPool"
+    Properties:
+      AdminCreateUserConfig: 
+        AllowAdminCreateUserOnly: false
+        InviteMessageTemplate: 
+          EmailMessage: 'Welcome to the Podcast Indexer. Username: {username} Pwd: {####}'
+          EmailSubject: Welcome to Podcast Indexer.
+          SMSMessage: 'Welcome to Podcast Indexer. Username: {username} Pwd: {####}'
+        UnusedAccountValidityDays: 14
+      AliasAttributes: 
+        - email
+      AutoVerifiedAttributes: 
+        - email
+      EmailVerificationMessage: 'Welcome to the Podcast Indexer. Here is your confirmation code: {####}'
+      EmailVerificationSubject: Podcast Indexer Email Confirmation Code
+      Policies: 
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+      UserPoolName: !Sub '${AWS::StackName}-users'
+  CognitoApplicationClient:
+    Type: "AWS::Cognito::UserPoolClient"
+    Properties:
+        ClientName: !Sub '${AWS::StackName}-appclient'
+        GenerateSecret: false
+        RefreshTokenValidity: 2
+        UserPoolId: !Ref CognitoUserPool
+  CognitoAccessForAmazonES:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: es.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonESCognitoAccess"
+  CognitoAccessForAmazonESPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - iam:GetRole
+              - iam:PassRole
+              - iam:CreateRole
+              - iam:AttachRolePolicy
+              - ec2:DescribeVpcs
+              - cognito-identity:ListIdentityPools
+              - cognito-identity:DescribeIdentityPool
+              - cognito-idp:ListUserPools
+              - cognito-idp:DescribeUserPool
+              - cognito-idp:CreateUserPoolDomain
+              - cognito-idp:DeleteUserPoolDomain
+            Resource: '*'
+      Description: elasticsearch and rekognition cognito role
+      Roles:
+        - !Ref 'CognitoAccessForAmazonES'
+  CognitoUnauthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com 
+            Action: sts:AssumeRoleWithWebIdentity
+  CognitoAuthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com 
+            Action: sts:AssumeRoleWithWebIdentity
+  CognitoAuthKibanaPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - es:ESHttp*
+            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/*'
+      Description: elasticsearch and rekognition cognito role
+      Roles:
+        - !Ref 'CognitoAuthRole'
+  CfnStepFunction:
+    Type: "AWS::StepFunctions::StateMachine"
+    DependsOn:
+      - checkElasticsearchStatus
+    Properties:
+      RoleArn: !GetAtt StatesExecutionRole.Arn
+      DefinitionString:
+        !Sub |-
+        {
+          "StartAt": "checkAction",
+          "States": {
+            "checkAction": { 
+                "Type": "Task",
+                "Resource": "${checkElasticsearchStatus.Arn}",
+                "InputPath": "$",
+                "ResultPath": "$",
+                "Next": "IsActionComplete"
+            },
+            "IsActionComplete": {
+             "Type": "Choice",
+                          "Choices": [
+                            {
+                              "Variable": "$.response.Status",
+                              "StringEquals": "IN_PROCESS",
+                              "Next": "Wait"
+                            }
+                          ],
+                          "Default": "Complete"
+             },
+            "Wait": {
+              "Type": "Wait",
+              "Seconds": 30,
+              "Next": "checkAction"
+            },
+            "Complete": { 
+              "Type": "Pass",
+              "End": true
+            }
+          }
+        }
+  ESCognito:
+    Type: Custom::ESName
+    DependsOn:
+      - CfnStepFunction
+      - elasticsearchCognito
+      - checkElasticsearchStatus
+      - CfnLambdaRolePolicy
+      - CognitoAuthKibanaPolicy
+      - CognitoAccessForAmazonESPolicy
+    Properties: 
+      ServiceToken: !GetAtt elasticsearchCognito.Arn
+      StackName: !Ref AWS::StackName
+      esCluster: !Ref ESDomain
+      UserPoolId: !Ref CognitoUserPool
+      IdentityPoolId: !Ref CognitoIdentityPool
+      esRoleArn: !GetAtt CognitoAccessForAmazonES.Arn
+      kibanaUser: !Ref kibanaUser
+Outputs:
+  KibanaPassword:
+    Description: The password for the kibana user
+    Value: !GetAtt ESCognito.KibanaPassword
+  KibanaUser:
+    Description: The username for the kibana user
+    Value: !GetAtt ESCognito.KibanaUser
+  RssStateMachineUrl:
+    Description: A hyperlink to the Step Function Console
+    Value: !Sub https://console.aws.amazon.com/states/home?region=${AWS::Region}#/statemachines/view/${RssStateMachine}
+  KibanaUrl:
+    Description: A hyperlink to the Kibana tool
+    Value: !Sub https://${ESDomain.DomainEndpoint}/_plugin/kibana/

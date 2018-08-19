@@ -1,0 +1,76 @@
+{
+  "StartAt": "Process Podcast Rss",
+  "States": {
+    "Process Podcast Rss": {
+      "Type": "Task",
+      "Resource": "${processPodcastRss.Arn}",
+      "Next": "Create Custom Vocabulary for Transcribe",
+      "ResultPath": "$"
+    },
+    "Create Custom Vocabulary for Transcribe": {
+      "Type": "Task",
+      "Resource": "${createTranscribeVocabulary.Arn}",
+      "Next": "Is Vocabulary Completed?",
+      "ResultPath": "$.vocabularyInfo"
+    },
+    "Is Vocabulary Completed?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.vocabularyInfo.status",
+          "StringEquals": "READY",
+          "Next": "Create ElasticSearch Index Mapping"
+        }
+      ],
+      "Default": "Wait For Vocabulary Creation"
+    },
+    "Wait For Vocabulary Creation": {
+      "Type": "Wait",
+      "Seconds": 5,
+      "Next": "Check Vocabulary Status"
+    },
+    "Check Vocabulary Status": {
+      "Type": "Task",
+      "Resource": "${monitorTranscribeVocabulary.Arn}",
+      "Next": "Is Vocabulary Completed?",
+      "InputPath": "$.vocabularyInfo",
+      "ResultPath": "$.vocabularyInfo"
+    },
+    "Create ElasticSearch Index Mapping" : {
+      "Type": "Task",
+      "Resource": "${createElasticsearchIndex.Arn}",
+      "Next": "Process Podcast Episodes",
+      "InputPath": null,
+      "ResultPath": null
+    },
+    "Process Podcast Episodes": {
+      "Type": "Task",
+      "Resource": "${processPodcastItem.Arn}",
+      "Next": "Are all Episodes Processed?",
+      "ResultPath": "$.episodes"
+    },
+    "Are all Episodes Processed?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.episodes.status",
+          "StringEquals": "COMPLETE",
+          "Next": "Delete Transcribe Custom Vocabulary"
+        }
+      ],
+      "Default": "Wait 30 Seconds"
+    },
+    "Wait 30 Seconds": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "Process Podcast Episodes"
+    },
+    "Delete Transcribe Custom Vocabulary": {
+      "Type": "Task",
+      "Resource": "${deleteTranscribeVocabulary.Arn}",
+      "InputPath": "$.vocabularyInfo",
+      "ResultPath": "$.vocabularyInfo",
+      "End": true
+    }
+  }
+}
