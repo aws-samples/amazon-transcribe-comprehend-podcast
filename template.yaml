@@ -507,11 +507,6 @@ Resources:
             Resource: !GetAtt CognitoAccessForAmazonES.Arn
           - Effect: Allow
             Action:
-              - 's3:putObject'
-            Resource:
-              - 'arn:aws:s3:::gillemi-gillemi/*'
-          - Effect: Allow
-            Action:
               - 'cognito-idp:AdminCreateUser'
               - 'cognito-idp:CreateUserPoolDomain'
               - 'cognito-idp:DeleteUserPoolDomain'
