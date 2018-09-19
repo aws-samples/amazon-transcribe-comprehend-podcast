@@ -114,7 +114,7 @@ Now for some fun visualizations!
 
 1. On the Kibana home page, click **Management** on the left side toolbar.
 
-  ![import-dashboard](images/import-dashboard.png)
+	![import-dashboard](images/import-dashboard.png)
 
 1. On the management page, click **Import** and select kibana.json downloaded from above. 
 You need to map the visualization objects to the indices in your Kibana application like shown below. Confirm **Yes, overwrite all objects** when the pop-up appears. 
@@ -123,11 +123,11 @@ You need to map the visualization objects to the indices in your Kibana applicat
 
 1. You can now find the imported dashboard under **Dashboard** →  **Podcast analytics**
 
-  ![overall dashboard](images/overall-dashboard.png)
+	![overall dashboard](images/overall-dashboard.png)
 
 1. You can do analysis using the dashboard by leveraging the search functionality. For example, by putting the search term “machine learning”, we update the analytics by visualizing only episodes that contains the phrase “machine learning”
 
-  ![machine learning dashboard](images/machine-learning-dashboard.png)
+	![machine learning dashboard](images/machine-learning-dashboard.png)
 
 
 ## CloudFormation template resources
