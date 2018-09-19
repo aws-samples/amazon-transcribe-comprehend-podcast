@@ -70,7 +70,9 @@ Once the processing of episodes completes, you can search and visualize the resu
 
 	<img src="images/episodes-index.png" alt="kibana episode index" width="90%">
 
-1. Accept the defaults and click **Create Index Pattern**, then click the **Discover** entry on the left-hand toolbar. 
+1. In the second step, if you are asked to pick a Time Filter Field, choose “I don’t want to use the Time Filter”, then choose **Create Index Pattern**.
+
+1. Click the **Discover** entry on the left-hand toolbar. 
 
 1. Type in search terms you are interested in, and you can explore the episodes that mentions it and read on the transcript of the episode! In the example below, I used the query `nlp OR "natural language processing"` to search for episodes that mention either the word “nlp” or the phrase “natural language processing”. 
 
