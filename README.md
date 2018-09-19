@@ -160,10 +160,10 @@ You need to map the visualization objects to the indices in your Kibana applicat
 
 
 * **createTranscribeVocabulary**: Creates a [**custom vocabulary**](https://docs.aws.amazon.com/transcribe/latest/dg/how-it-works.html#how-vocabulary) for the Amazon Transcribe jobs so it will better understand when an AWS/tech jargon is mentioned. The custom vocabulary is created using the method mentioned above. 
-* **monitorTranscribeVocabulary**: Poll Amazon Transcribe to determine if the custom vocabulary creation has completed.
-* **createElasticsearchIndex**: create index mappings (https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html) in ElasticSearch* *
-* **processPodcastItem**: Creates a child state machine execution for each episode while maintaining a maximum of 10 concurrent child processes. This function will keep track of how many processes are active and throttle the downstream calls once the maximum is hit. S3 is used to store additional state about each episode. The state machine uses a loop 
-* **deleteTranscribeVocabulary**: Cleans up the custom vocabulary after the processing of all episodes has completed.
+* **monitorTranscribeVocabulary**: Polls Amazon Transcribe to determine if the custom vocabulary creation has completed.
+* **createElasticsearchIndex**: Creates [**index mappings**](https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html) in ElasticSearch
+* **processPodcastItem**: Creates a child state machine execution for each episode while maintaining a maximum of 10 concurrent child processes. This function keeps track of how many processes are active and throttles the downstream calls once the maximum is hit. Amazon S3 is used to store additional state about each episode. 
+* **deleteTranscribeVocabulary**: Cleans up the custom vocabulary after the processing of all episodes is complete. Note that we added this step to minimize artifacts that stay around in your account after you run the demo application. However, when you build your own apps with Amazon Transcribe, you should consider keeping the custom vocabulary around for future processing jobs.
 
 #### Episode Step Function State Machine Lambda functions
 
