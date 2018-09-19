@@ -1,6 +1,6 @@
 ## Amazon Transcribe Comprehend Podcast
 
-A demo application that transcribes and indexes podcast episodes so the listeners can explore and discover episodes of interest and podcast owners can do analytics on the content over time. This solution leverages Amazon Transcribe, Amazon Comprehend, Amazon ElasticSearch, AWS Step Functions and AWS Lambda.
+A demo application that transcribes and indexes podcast episodes so the listeners can explore and discover episodes of interest and podcast owners can do analytics on the content over time. This solution leverages Amazon Transcribe, Amazon Comprehend, Amazon Elasticsearch, AWS Step Functions and AWS Lambda.
 
 ### High-level Architecture
 
@@ -12,7 +12,7 @@ A demo application that transcribes and indexes podcast episodes so the listener
 
 	Region| Region Code | Launch
 	------|------|-------
-	US East (Virginia)| <span style="font-family:'Courier';">us-east-1</span> | [![Launch Step 0A in us-east-2](images/cfn-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=podcast-transcribe-index&templateURL=https://s3.amazonaws.com/angelaw-workshop/podcast-code/packaged.yaml)
+	US East (Virginia)| <span style="font-family:'Courier';">us-east-1</span> | [![Launch Step 0A in us-east-2](images/cfn-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=podcast-transcribe-index&templateURL=https://s3.amazonaws.com/aws-machine-learning-blog/artifacts/discovering-podcasts/packaged.yaml)
 
 	* Click **Create Change Set** to create the change set for this transform
 
@@ -151,8 +151,10 @@ You need to map the visualization objects to the indices in your Kibana applicat
 #### RSS Feed Step Function State Machine Lambda functions
  
 * **processPodcastRss**: Downloads the RSS file and parses it to determine the episodes to download. This function also leverages Amazon Comprehend's [**entity extraction**](https://docs.aws.amazon.com/comprehend/latest/dg/how-entities.html) feature for 2 use cases:
-    * Compute an estimate on the number of speakers in each episode. We do this by using Comprehend to find people's names in each episode's abstract, because we find many podcast hosts likes to mention their guest speaker's names in the abstract. This helps us later when we use Amazon Transcribe to break out the transcription into multiple speakers. If no names are found in the abstract, we will assume the episode is a one man show. 
-    * Build a domain-specific custom vocabulary list. If a Podcast is about AWS, you will hear lots of terminologies unique to the specific domain (e.g. EC2, Github) that are completely different from a Podcast about Astronomy (e.g. Neptune, Milky Way). Providing a custom vocabulary list to Transcribe can help guide the service in identifying an audio segment sounding like “easy too” to its actual meaning “EC2”. In this example, we automatically generate the custom vocabulary list by using the named entities extracted from episode abstracts to make Amazon Transcribe more domain aware. Keep in mind that this approach may not cover all jargons that could appear in transcripts. To get more accurate transcriptions, you can complement this approach by drafting a common dictionary of domain specific terms to construct this custom vocabulary list for Amazon Transcribe. 
+
+	* To compute an estimate of the number of speakers in each episode. We do this by using Amazon Comprehend to find people's names in each episode's abstract. We find that many podcast hosts like to mention their guest speakers’ names in the abstract. This helps us later when we use Amazon Transcribe to break out the transcription into multiple speakers. If no names are found in the abstract, we will assume the episode has a single speaker. 
+
+	* To build a domain-specific custom vocabulary list. If a podcast is about AWS, you will hear lots of expressions unique to the specific domain (e.g., EC2, S3) that are completely different from expressions found in a podcast about astronomy (e.g., Milky Way, Hubble). Providing a custom vocabulary list to Amazon Transcribe can help guide the service in identifying an audio segment that sounds like “easy too” to its actual meaning “EC2.” In this blog post, we automatically generate the custom vocabulary list by using the named entities extracted from episode abstracts to make Amazon Transcribe more domain aware. Keep in mind that this approach may not cover all jargon that could appear in the transcripts. To get more accurate transcriptions, you can complement this approach by drafting a list of common domain-specific terms so that you can construct a custom vocabulary list for Amazon Transcribe. 
 
 
 * **createTranscribeVocabulary**: Creates a [**custom vocabulary**](https://docs.aws.amazon.com/transcribe/latest/dg/how-it-works.html#how-vocabulary) for the Amazon Transcribe jobs so it will better understand when an AWS/tech jargon is mentioned. The custom vocabulary is created using the method mentioned above. 
