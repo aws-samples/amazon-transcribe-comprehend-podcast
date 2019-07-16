@@ -1,6 +1,6 @@
 ## Amazon Transcribe Comprehend Podcast
 
-A demo application that transcribes and indexes podcast episodes so the listeners can explore and discover episodes of interest and podcast owners can do analytics on the content over time. This solution leverages Amazon Transcribe, Amazon Comprehend, Amazon ElasticSearch, AWS Step Functions and AWS Lambda.
+A demo application that transcribes and indexes podcast episodes so the listeners can explore and discover episodes of interest and podcast owners can do analytics on the content over time. This solution leverages Amazon Transcribe, Amazon Comprehend, Amazon Elasticsearch, AWS Step Functions and AWS Lambda.
 
 ### High-level Architecture
 
@@ -12,7 +12,7 @@ A demo application that transcribes and indexes podcast episodes so the listener
 
 	Region| Region Code | Launch
 	------|------|-------
-	US East (Virginia)| <span style="font-family:'Courier';">us-east-1</span> | [![Launch Step 0A in us-east-2](images/cfn-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=podcast-transcribe-index&templateURL=https://s3.amazonaws.com/angelaw-workshop/podcast-code/packaged.yaml)
+	US East (Virginia)| <span style="font-family:'Courier';">us-east-1</span> | [![Launch Step 0A in us-east-2](images/cfn-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=podcast-transcribe-index&templateURL=https://s3.amazonaws.com/aws-machine-learning-blog/artifacts/discovering-podcasts/packaged.yaml)
 
 	* Click **Create Change Set** to create the change set for this transform
 
@@ -70,7 +70,9 @@ Once the processing of episodes completes, you can search and visualize the resu
 
 	<img src="images/episodes-index.png" alt="kibana episode index" width="90%">
 
-1. Accept the defaults and click **Create Index Pattern**, then click the **Discover** entry on the left-hand toolbar. 
+1. In the second step, if you are asked to pick a Time Filter Field, choose “I don’t want to use the Time Filter”, then choose **Create Index Pattern**.
+
+1. Click the **Discover** entry on the left-hand toolbar. 
 
 1. Type in search terms you are interested in, and you can explore the episodes that mentions it and read on the transcript of the episode! In the example below, I used the query `nlp OR "natural language processing"` to search for episodes that mention either the word “nlp” or the phrase “natural language processing”. 
 
@@ -114,7 +116,7 @@ Now for some fun visualizations!
 
 1. On the Kibana home page, click **Management** on the left side toolbar.
 
-  ![import-dashboard](images/import-dashboard.png)
+	![import-dashboard](images/import-dashboard.png)
 
 1. On the management page, click **Import** and select kibana.json downloaded from above. 
 You need to map the visualization objects to the indices in your Kibana application like shown below. Confirm **Yes, overwrite all objects** when the pop-up appears. 
@@ -123,11 +125,11 @@ You need to map the visualization objects to the indices in your Kibana applicat
 
 1. You can now find the imported dashboard under **Dashboard** →  **Podcast analytics**
 
-  ![overall dashboard](images/overall-dashboard.png)
+	![overall dashboard](images/overall-dashboard.png)
 
 1. You can do analysis using the dashboard by leveraging the search functionality. For example, by putting the search term “machine learning”, we update the analytics by visualizing only episodes that contains the phrase “machine learning”
 
-  ![machine learning dashboard](images/machine-learning-dashboard.png)
+	![machine learning dashboard](images/machine-learning-dashboard.png)
 
 
 ## CloudFormation template resources
@@ -151,15 +153,17 @@ You need to map the visualization objects to the indices in your Kibana applicat
 #### RSS Feed Step Function State Machine Lambda functions
  
 * **processPodcastRss**: Downloads the RSS file and parses it to determine the episodes to download. This function also leverages Amazon Comprehend's [**entity extraction**](https://docs.aws.amazon.com/comprehend/latest/dg/how-entities.html) feature for 2 use cases:
-    * Compute an estimate on the number of speakers in each episode. We do this by using Comprehend to find people's names in each episode's abstract, because we find many podcast hosts likes to mention their guest speaker's names in the abstract. This helps us later when we use Amazon Transcribe to break out the transcription into multiple speakers. If no names are found in the abstract, we will assume the episode is a one man show. 
-    * Build a domain-specific custom vocabulary list. If a Podcast is about AWS, you will hear lots of terminologies unique to the specific domain (e.g. EC2, Github) that are completely different from a Podcast about Astronomy (e.g. Neptune, Milky Way). Providing a custom vocabulary list to Transcribe can help guide the service in identifying an audio segment sounding like “easy too” to its actual meaning “EC2”. In this example, we automatically generate the custom vocabulary list by using the named entities extracted from episode abstracts to make Amazon Transcribe more domain aware. Keep in mind that this approach may not cover all jargons that could appear in transcripts. To get more accurate transcriptions, you can complement this approach by drafting a common dictionary of domain specific terms to construct this custom vocabulary list for Amazon Transcribe. 
+
+	* To compute an estimate of the number of speakers in each episode. We do this by using Amazon Comprehend to find people's names in each episode's abstract. We find that many podcast hosts like to mention their guest speakers’ names in the abstract. This helps us later when we use Amazon Transcribe to break out the transcription into multiple speakers. If no names are found in the abstract, we will assume the episode has a single speaker. 
+
+	* To build a domain-specific custom vocabulary list. If a podcast is about AWS, you will hear lots of expressions unique to the specific domain (e.g., EC2, S3) that are completely different from expressions found in a podcast about astronomy (e.g., Milky Way, Hubble). Providing a custom vocabulary list to Amazon Transcribe can help guide the service in identifying an audio segment that sounds like “easy too” to its actual meaning “EC2.” In this blog post, we automatically generate the custom vocabulary list by using the named entities extracted from episode abstracts to make Amazon Transcribe more domain aware. Keep in mind that this approach may not cover all jargon that could appear in the transcripts. To get more accurate transcriptions, you can complement this approach by drafting a list of common domain-specific terms so that you can construct a custom vocabulary list for Amazon Transcribe. 
 
 
 * **createTranscribeVocabulary**: Creates a [**custom vocabulary**](https://docs.aws.amazon.com/transcribe/latest/dg/how-it-works.html#how-vocabulary) for the Amazon Transcribe jobs so it will better understand when an AWS/tech jargon is mentioned. The custom vocabulary is created using the method mentioned above. 
-* **monitorTranscribeVocabulary**: Poll Amazon Transcribe to determine if the custom vocabulary creation has completed.
-* **createElasticsearchIndex**: create index mappings (https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html) in ElasticSearch* *
-* **processPodcastItem**: Creates a child state machine execution for each episode while maintaining a maximum of 10 concurrent child processes. This function will keep track of how many processes are active and throttle the downstream calls once the maximum is hit. S3 is used to store additional state about each episode. The state machine uses a loop 
-* **deleteTranscribeVocabulary**: Cleans up the custom vocabulary after the processing of all episodes has completed.
+* **monitorTranscribeVocabulary**: Polls Amazon Transcribe to determine if the custom vocabulary creation has completed.
+* **createElasticsearchIndex**: Creates [**index mappings**](https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html) in ElasticSearch
+* **processPodcastItem**: Creates a child state machine execution for each episode while maintaining a maximum of 10 concurrent child processes. This function keeps track of how many processes are active and throttles the downstream calls once the maximum is hit. Amazon S3 is used to store additional state about each episode. 
+* **deleteTranscribeVocabulary**: Cleans up the custom vocabulary after the processing of all episodes is complete. Note that we added this step to minimize artifacts that stay around in your account after you run the demo application. However, when you build your own apps with Amazon Transcribe, you should consider keeping the custom vocabulary around for future processing jobs.
 
 #### Episode Step Function State Machine Lambda functions
 
