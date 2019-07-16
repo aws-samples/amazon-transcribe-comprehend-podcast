@@ -91,7 +91,8 @@ def lambda_handler(event, context):
                     speaker_list.append(entity['Text'])
                 # add to vocabulary if not already in there
                 if entity['Type'] in vocabularyTypes and not entity['Text'] in vocabularyItems:
-                    vocabularyItems.append(entity['Text'])
+                    cleanText = entity['Text'].replace('@','')
+                    vocabularyItems.append(cleanText)
 
             duplicates = find_duplicate_person(speaker_list)
             for d in duplicates:
