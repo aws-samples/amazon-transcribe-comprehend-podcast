@@ -20,9 +20,19 @@
           "Variable": "$.vocabularyInfo.status",
           "StringEquals": "READY",
           "Next": "Create ElasticSearch Index Mapping"
+        },
+        {
+          "Variable": "$.vocabularyInfo.status",
+          "StringEquals": "PENDING",
+          "Next": "Wait For Vocabulary Creation"
+        },
+        {
+          "Variable": "$.vocabularyInfo.status",
+          "StringEquals": "FAILED",
+          "Next": "Processing Error"
         }
       ],
-      "Default": "Wait For Vocabulary Creation"
+      "Default": "Processing Error"
     },
     "Wait For Vocabulary Creation": {
       "Type": "Wait",
@@ -36,7 +46,7 @@
       "InputPath": "$.vocabularyInfo",
       "ResultPath": "$.vocabularyInfo"
     },
-    "Create ElasticSearch Index Mapping" : {
+    "Create ElasticSearch Index Mapping": {
       "Type": "Task",
       "Resource": "${createElasticsearchIndex.Arn}",
       "Next": "Process Podcast Episodes",
@@ -71,6 +81,9 @@
       "InputPath": "$.vocabularyInfo",
       "ResultPath": "$.vocabularyInfo",
       "End": true
+    },
+    "Processing Error": {
+      "Type": "Fail"
     }
   }
 }
