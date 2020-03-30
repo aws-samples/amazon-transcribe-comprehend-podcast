@@ -4,7 +4,8 @@ import os
 import re
 import boto3
 from botocore.client import Config
-from urllib2 import urlopen, URLError, HTTPError
+from urllib.request import urlopen
+from urllib.error import URLError, HTTPError
 import xml.etree.ElementTree as ET
 import string
 import random

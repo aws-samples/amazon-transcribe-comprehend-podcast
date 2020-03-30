@@ -2,7 +2,8 @@ from __future__ import print_function
 import json
 import os
 import boto3
-from urllib2 import urlopen, URLError, HTTPError
+from urllib.request import urlopen
+from urllib.error import URLError, HTTPError
 import xml.etree.ElementTree as ET
 import logging
 from dateutil import parser
@@ -130,10 +131,10 @@ def lambda_handler(event, context):
                 break
 
     # handle errors
-    except HTTPError, e:
+    except HTTPError as e:
         print("HTTP Error:", e.code, feed_url)
         raise InvalidInputError("Unable to download RSS feed: " + feed_url)
-    except URLError, e:
+    except URLError as e:
         print("URL Error:", e.reason, feed_url)
         raise InvalidInputError("Unable to download RSS feed: " + feed_url)
 
