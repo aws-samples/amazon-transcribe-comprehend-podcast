@@ -1,6 +1,7 @@
 from __future__ import print_function
 import boto3
-from urllib2 import urlopen, URLError, HTTPError
+from urllib.request import urlopen
+from urllib.error import URLError, HTTPError
 import os
 import logging
 from common_lib import id_generator

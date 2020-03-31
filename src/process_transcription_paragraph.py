@@ -1,5 +1,5 @@
 import os
-from urllib2 import urlopen
+from urllib.request import urlopen
 import json
 import os
 import string

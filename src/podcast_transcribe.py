@@ -75,8 +75,6 @@ def lambda_handler(event, context):
     url = "https://s3-" + region + ".amazonaws.com/" + bucket + "/" + key
 
     try:
-        showSpeakerLabels = (int(event['speakers']) > 1)
-
         settings = {
             'VocabularyName': event['vocabularyInfo']['name'],
             'ShowSpeakerLabels': False
@@ -84,7 +82,7 @@ def lambda_handler(event, context):
 
         if int(event['speakers']) > 1:
             settings['ShowSpeakerLabels'] = True
-            settings['MaxSpeakerLabels'] = int(event['speakers'])
+            settings['MaxSpeakerLabels'] = max(int(event['speakers']), 4)
 
         # Call the AWS SDK to initiate the transcription job.
         response = client.start_transcription_job(

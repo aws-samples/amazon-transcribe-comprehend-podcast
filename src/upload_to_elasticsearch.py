@@ -31,10 +31,6 @@ FULL_EPISODE_INDEX = os.getenv('ES_EPISODE_INDEX', default='episodes')
 # get the Elasticsearch index name from the environment variables
 KEYWORDS_INDEX = os.getenv('ES_PARAGRAPH_INDEX', default='paragraphs')
 
-# get the Elasticsearch document type from the environment variables
-FULL_EPISODE_DOCTYPE = os.getenv('FULL_EPISODE_DOCTYPE', default='episode')
-
-
 s3_client = boto3.client('s3')
 # Create the auth token for the sigv4 signature
 session = boto3.session.Session()
@@ -109,7 +105,8 @@ def index_episode(es, event, fullEpisodeS3Location):
     logger.debug(json.dumps(doc))
     # add the document to the index
     start = time.time()
-    res = es.index(index=FULL_EPISODE_INDEX, doc_type=FULL_EPISODE_DOCTYPE, body=doc, id=audio_url)
+    res = es.index(index=FULL_EPISODE_INDEX,
+                   body=doc, id=audio_url)
     logger.info("response")
     logger.info(json.dumps(res, indent=4))
     logger.info('REQUEST_TIME es_client.index {:10.4f}'.format(time.time() - start))

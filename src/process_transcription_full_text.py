@@ -6,8 +6,7 @@ import os
 import logging
 import time
 import json
-# import urllib.request
-from urllib2 import urlopen
+from urllib.request import urlopen
 import string
 import random
 from common_lib import find_duplicate_person, id_generator

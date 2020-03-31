@@ -2,7 +2,8 @@ from __future__ import print_function
 import json
 import os
 import boto3
-from urllib2 import urlopen, URLError, HTTPError
+from urllib.request import urlopen
+from urllib.error import URLError, HTTPError
 import xml.etree.ElementTree as ET
 import logging
 from dateutil import parser
@@ -88,11 +89,16 @@ def lambda_handler(event, context):
                 # is inaccurate, it doesn't have a major impact on the functionality of
                 # the system.
                 if entity['Type'] == 'PERSON':
-                    speaker_list.append(entity['Text'])
+                    if not entity['Text'].startswith('@'):
+                        speaker_list.append(entity['Text'])
+                    else:
+                        logger.info(f'skipping person {entity["Text"]}')
                 # add to vocabulary if not already in there
                 if entity['Type'] in vocabularyTypes and not entity['Text'] in vocabularyItems:
-                    cleanText = entity['Text'].replace('@','')
-                    vocabularyItems.append(cleanText)
+                    cleanText = entity['Text'].replace('@', '')
+                    cleanText = cleanText.replace('.', '')
+                    if cleanText:
+                        vocabularyItems.append(cleanText)
 
             duplicates = find_duplicate_person(speaker_list)
             for d in duplicates:
@@ -130,10 +136,10 @@ def lambda_handler(event, context):
                 break
 
     # handle errors
-    except HTTPError, e:
+    except HTTPError as e:
         print("HTTP Error:", e.code, feed_url)
         raise InvalidInputError("Unable to download RSS feed: " + feed_url)
-    except URLError, e:
+    except URLError as e:
         print("URL Error:", e.reason, feed_url)
         raise InvalidInputError("Unable to download RSS feed: " + feed_url)
 
