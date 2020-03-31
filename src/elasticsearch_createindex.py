@@ -29,8 +29,6 @@ isDebugMode = os.environ['DEBUG_MODE']
 FULL_EPISODE_INDEX = os.getenv('ES_EPISODE_INDEX', default='episodes')
 # get the Elasticsearch index name from the environment variables
 KEYWORDS_INDEX = os.getenv('ES_PARAGRAPH_INDEX', default='paragraphs')
-# get the Elasticsearch document type from the environment variables
-FULL_EPISODE_DOCTYPE = os.getenv('FULL_EPISODE_DOCTYPE', default='episode')
 
 s3_client = boto3.client('s3')
 # Create the auth token for the sigv4 signature
@@ -62,35 +60,33 @@ def create_episode_index():
     mappings = '''
     {
         "mappings": {
-            "%s": {
-                "properties": {
-                    "audio_url":{
-                        "type": "keyword"
-                    },
-                    "audio_type":{
-                        "type": "keyword"
-                    },
-                    "transcript":{
-                        "type": "text"
-                    },
-                    "audio_s3_location": {
-                        "type": "keyword"
-                    },
-                    "published_time":{
-                        "type":   "date",
-                        "format": "yyyy:MM:dd HH:mm:ss"
-                    },
-                    "summary": {
-                        "type": "text"
-                    },
-                    "source_feed":{
-                        "type": "keyword"
-                    }
+            "properties": {
+                "audio_url":{
+                    "type": "keyword"
+                },
+                "audio_type":{
+                    "type": "keyword"
+                },
+                "transcript":{
+                    "type": "text"
+                },
+                "audio_s3_location": {
+                    "type": "keyword"
+                },
+                "published_time":{
+                    "type":   "date",
+                    "format": "yyyy:MM:dd HH:mm:ss"
+                },
+                "summary": {
+                    "type": "text"
+                },
+                "source_feed":{
+                    "type": "keyword"
                 }
             }
         }
     }
-    ''' % FULL_EPISODE_DOCTYPE
+    '''
     start = time.time()
     logger.info("mappings to create for index: " + mappings)
     res = es.indices.create(index=FULL_EPISODE_INDEX, body=mappings)

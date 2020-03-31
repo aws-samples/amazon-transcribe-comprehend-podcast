@@ -89,11 +89,16 @@ def lambda_handler(event, context):
                 # is inaccurate, it doesn't have a major impact on the functionality of
                 # the system.
                 if entity['Type'] == 'PERSON':
-                    speaker_list.append(entity['Text'])
+                    if not entity['Text'].startswith('@'):
+                        speaker_list.append(entity['Text'])
+                    else:
+                        logger.info(f'skipping person {entity["Text"]}')
                 # add to vocabulary if not already in there
                 if entity['Type'] in vocabularyTypes and not entity['Text'] in vocabularyItems:
-                    cleanText = entity['Text'].replace('@','')
-                    vocabularyItems.append(cleanText)
+                    cleanText = entity['Text'].replace('@', '')
+                    cleanText = cleanText.replace('.', '')
+                    if cleanText:
+                        vocabularyItems.append(cleanText)
 
             duplicates = find_duplicate_person(speaker_list)
             for d in duplicates:
