@@ -50,6 +50,14 @@
       "Type": "Task",
       "Resource": "${createElasticsearchIndex.Arn}",
       "Next": "Process Podcast Episodes",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "Delete Transcribe Custom Vocabulary"
+        }
+      ],
       "InputPath": null,
       "ResultPath": null
     },
@@ -57,6 +65,14 @@
       "Type": "Task",
       "Resource": "${processPodcastItem.Arn}",
       "Next": "Are all Episodes Processed?",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "Delete Transcribe Custom Vocabulary"
+        }
+      ],
       "ResultPath": "$.episodes"
     },
     "Are all Episodes Processed?": {

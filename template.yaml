@@ -414,6 +414,14 @@ Resources:
               "Type": "Task",
               "Resource": "${createElasticsearchIndex.Arn}",
               "Next": "Process Podcast Episodes",
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "Next": "Delete Transcribe Custom Vocabulary"
+                }
+              ],
               "InputPath": null,
               "ResultPath": null
             },
@@ -421,6 +429,14 @@ Resources:
               "Type": "Task",
               "Resource": "${processPodcastItem.Arn}",
               "Next": "Are all Episodes Processed?",
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "Next": "Delete Transcribe Custom Vocabulary"
+                }
+              ],
               "ResultPath": "$.episodes"
             },
             "Are all Episodes Processed?": {
@@ -450,7 +466,7 @@ Resources:
               "Type": "Fail"
             }
           }
-        }
+        } 
 
   ESDomain:
     Type: AWS::Elasticsearch::Domain
