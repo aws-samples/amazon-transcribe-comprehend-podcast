@@ -635,6 +635,12 @@ Resources:
         RefreshTokenValidity: 2
         UserPoolId: !Ref CognitoUserPool
 
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub 'kibana-${AWS::StackName}-${AWS::Region}-${AWS::AccountId}'
+      UserPoolId: !Ref CognitoUserPool
+
   ESCognito:
     Type: Custom::ESName
     DependsOn:
