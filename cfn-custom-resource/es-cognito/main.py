@@ -5,16 +5,13 @@ import json
 import cfnresponse
 import logging
 
-from botocore.exceptions import ClientError
-
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-es_client = boto3.client('es')
 cognito_idp_client = boto3.client('cognito-idp')
 
 
-# Generates a random ID for the step function execution
+# Generates a random ID
 def id_generator(size=12, chars=string.ascii_uppercase + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
 
@@ -47,10 +44,7 @@ def configure_cognito_lambda_handler(event, context):
 
 
 def create(event):
-    es_domain_name = event['ResourceProperties']['EsCluster']
     user_pool_id = event['ResourceProperties']['UserPoolId']
-
-    create_user_pool_domain(es_domain_name, user_pool_id)
 
     kibana_user, kibana_password, kibana_email = get_user_credentials(event)
     add_user(user_pool_id, kibana_user, kibana_email, kibana_password)
@@ -60,41 +54,7 @@ def create(event):
 
 
 def delete(event):
-    user_pool_id = event['ResourceProperties']['UserPoolId']
-    es_domain_name = event['ResourceProperties']['EsCluster']
-
-    delete_user_pool_domain(es_domain_name, user_pool_id)
     return cfnresponse.SUCCESS
-
-
-def create_user_pool_domain(domain_name, user_pool_id):
-    try:
-        cognito_response = cognito_idp_client.create_user_pool_domain(
-            Domain=domain_name,
-            UserPoolId=user_pool_id
-        )
-        logger.info("create Cognito domain {} for user pool {} successful.".format(domain_name, user_pool_id))
-        logger.debug(cognito_response)
-    except ClientError as e:
-        if 'InvalidParameterException' in e.response['Error']['Code'] and "exists" in e.response['Error']['Message']:
-            logger.info("Domain [{}] already created for user pool [{}]".format(domain_name, user_pool_id))
-            pass
-        else:
-            logger.error("got error creating domain in user pool [{}] : {}".format(user_pool_id, e.response['Error']))
-            raise
-
-
-def delete_user_pool_domain(domain_name, user_pool_id):
-    try:
-        cognito_response = cognito_idp_client.delete_user_pool_domain(
-            Domain=domain_name,
-            UserPoolId=user_pool_id
-        )
-        logger.info("deleted user pool: {}".format(user_pool_id))
-        logger.debug(cognito_response)
-    except ClientError as e:
-        logger.error("Error deleting user pool", exc_info=True)
-        raise
 
 
 def get_user_credentials(event):
