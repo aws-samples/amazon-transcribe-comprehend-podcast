@@ -3,5 +3,5 @@ elasticsearch>=7.0.0,<8.0.0
 certifi==2018.4.16
 chardet==3.0.4
 idna==2.6
-requests==2.20.0
+requests==2.31.0
 urllib3==1.26.5
